@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stormwater Merit Order Supply Curve</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #ffffff;
+    color: #3d3d3a;
+    padding: 24px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1e1e1c; color: #c2c0b6; }
+  }
+  h1 { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: #888780; margin-bottom: 14px; line-height: 1.6; }
+  .legend { display: flex; gap: 14px; margin-bottom: 10px; font-size: 10px; color: #888780; flex-wrap: wrap; align-items: center; }
+  .chart-wrap { position: relative; }
+  canvas#mc { width: 100%; display: block; }
+  #mct {
+    position: absolute; display: none; pointer-events: none;
+    background: #ffffff; border: 0.5px solid #d3d1c7;
+    border-radius: 8px; padding: 8px 10px;
+    font-size: 11px; line-height: 1.6; max-width: 220px; z-index: 10; color: #3d3d3a;
+  }
+  @media (prefers-color-scheme: dark) {
+    #mct { background: #2a2a28; border-color: #444441; color: #c2c0b6; }
+  }
+  .controls { margin: 10px 0 6px; display: flex; align-items: center; gap: 10px; font-size: 11px; }
+  .controls label { white-space: nowrap; font-weight: 500; min-width: 80px; }
+  #glab { font-size: 10px; color: #888780; margin-bottom: 8px; min-height: 16px; }
+  #mstat { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-height: 28px; font-size: 11px; margin-bottom: 8px; }
+  .cobenefit-legend { display: flex; gap: 14px; font-size: 10px; color: #888780; flex-wrap: wrap; margin-bottom: 8px; }
+  .footnote { font-size: 10px; color: #888780; margin-top: 8px; line-height: 1.5; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; vertical-align: middle; margin-right: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Stormwater Solutions — Merit Order Supply Curve</h1>
+<p class="subtitle">Solutions ordered left-to-right by unit cost (merit order). Bar <strong>width</strong> = normalised capacity contribution. Drag the slider to set the climate-induced capacity gap — solutions left of the amber line enter the merit order.</p>
+
+<div class="legend">
+  <span style="display:flex;align-items:center;gap:5px">
+    <span style="width:16px;height:10px;background:#1D9E75;border-radius:2px;opacity:.82;display:inline-block"></span>
+    Green / nature-based
+  </span>
+  <span style="display:flex;align-items:center;gap:5px">
+    <canvas id="lc" width="16" height="10" style="border-radius:2px;vertical-align:middle"></canvas>
+    Conventional grey (cost derived from pipe data)
+  </span>
+</div>
+
+<div class="chart-wrap">
+  <canvas id="mc"></canvas>
+  <div id="mct"></div>
+</div>
+
+<div class="controls">
+  <label for="gsl">Climate gap</label>
+  <input type="range" id="gsl" min="0" max="73" value="25" step="1" style="flex:1">
+</div>
+<div id="glab"></div>
+<div id="mstat"></div>
+
+<div class="cobenefit-legend">
+  <span><span class="dot" style="background:#3B8BD4"></span>Flood attenuation</span>
+  <span><span class="dot" style="background:#1D9E75"></span>Water quality</span>
+  <span><span class="dot" style="background:#7F77DD"></span>Volume reduction</span>
+</div>
+
+<p class="footnote">Capacity units are normalised relative contributions derived from the reports — not absolute volumes. Existing grey infrastructure handles current design-storm conveyance but provides no water quality treatment. Sources: Ira (2017) GW/Porirua Whaitua; FWMT Report 9, Auckland Council (2021).</p>
+
+<script>
+(function(){
+var cv=document.getElementById('mc'),cx=cv.getContext('2d'),tp=document.getElementById('mct');
+var W=740,H=460,R=window.devicePixelRatio||1;
+cv.width=W*R;cv.height=H*R;cv.style.width=W+'px';cv.style.height=H+'px';cx.scale(R,R);
+var dk=window.matchMedia('(prefers-color-scheme:dark)').matches;
+var TC=dk?'#c2c0b6':'#3d3d3a',GC=dk?'#3a3936':'#d3d1c7',AC=dk?'#666461':'#888780',MC2=dk?'#555550':'#aaa9a0';
+var ML=82,MT=44,MR=16,MB=88,CW=W-ML-MR,CH=H-MT-MB;
+var TOTAL_CAP=108,EX_CAP=35,EX_COST=1050,YMIN=75,YMAX=260000;
+function xp(v){return ML+(v/TOTAL_CAP)*CW;}
+function yp(v){return MT+(Math.log(YMAX)-Math.log(v))/(Math.log(YMAX)-Math.log(YMIN))*CH;}
+function rr(x,y,w,h,r){r=Math.min(r||3,w/2,h/2);cx.beginPath();cx.moveTo(x+r,y);cx.lineTo(x+w-r,y);cx.arcTo(x+w,y,x+w,y+r,r);cx.lineTo(x+w,y+h-r);cx.arcTo(x+w,y+h,x+w-r,y+h,r);cx.lineTo(x+r,y+h);cx.arcTo(x,y+h,x,y+h-r,r);cx.lineTo(x,y+r);cx.arcTo(x,y,x+r,y,r);cx.closePath();}
+function mkHatch(col,size,lw){var p=document.createElement('canvas');p.width=size;p.height=size;var x=p.getContext('2d');x.strokeStyle=col;x.lineWidth=lw;x.beginPath();x.moveTo(-size/2,size);x.lineTo(size,0);x.stroke();x.beginPath();x.moveTo(0,size);x.lineTo(size,0);x.stroke();x.beginPath();x.moveTo(size/2,size);x.lineTo(size*1.5,0);x.stroke();return cx.createPattern(p,'repeat');}
+var hatch=mkHatch(dk?'#888780':'#5F5E5A',6,1);
+var lc=document.getElementById('lc'),lx=lc.getContext('2d'),lR=R;
+lc.width=16*lR;lc.height=10*lR;lx.scale(lR,lR);
+var lh=mkHatch(dk?'#888780':'#5F5E5A',6,1);
+lx.fillStyle=dk?'#444441':'#d3d1c7';lx.fillRect(0,0,16,10);lx.globalAlpha=.65;lx.fillStyle=lh;lx.fillRect(0,0,16,10);lx.globalAlpha=1;lx.strokeStyle=AC;lx.lineWidth=.5;lx.strokeRect(.25,.25,15.5,9.5);
+var BH=14;
+var SOLS=[
+  {n:'Dry detention basin',sh:'Detention',cost:100,cap:15,c:'#1D9E75',fl:true,wq:false,vol:false,t:'Cheapest new option. Peak flow & flood control only — no water quality benefit. Largest capacity per dollar of any new solution.'},
+  {n:'Wet pond',sh:'Wet pond',cost:290,cap:12,c:'#185FA5',fl:true,wq:true,vol:false,t:'Flood attenuation + sediment/metal removal (75% TSS). Best-value dual-purpose solution. Catchment 5–25ha.'},
+  {n:'Riparian buffer',sh:'Riparian',cost:450,cap:5,c:'#639922',fl:true,wq:true,vol:true,t:'Triple co-benefit: flood, quality & volume reduction. Capacity constrained by available riparian corridor.'},
+  {n:'Swale / filter strip',sh:'Swale',cost:1300,cap:7,c:'#0F6E56',fl:false,wq:true,vol:true,t:'Street-scale. Can replace piped drainage while adding water quality treatment. Slopes <5% essential.'},
+  {n:'Constructed wetland',sh:'Wetland',cost:1400,cap:10,c:'#5DCAA5',fl:true,wq:true,vol:true,t:'Most comprehensive treatment: sediments, metals, hydrocarbons, bacteria & nutrients. Catchment 2–15ha.'},
+  {n:'Rain garden',sh:'Rain gdn',cost:3880,cap:6,c:'#7F77DD',fl:false,wq:true,vol:true,t:'Lot-to-street scale. Disconnects impervious surfaces. TAC: $2,000 + $300/m² device area.'},
+  {n:'Sand filter',sh:'Sand flt',cost:12000,cap:3,c:'#BA7517',fl:false,wq:true,vol:false,t:'Specialist for hydrocarbons & fine metals. High construction cost. Best at industrial/motorway locations.'},
+  {n:'Rain tank',sh:'Rain tank',cost:22000,cap:4,c:'#993556',fl:false,wq:false,vol:true,t:'Building-scale only. Volume reduction + potable water savings. Cost is OoM $/ha conversion.'},
+  {n:'Permeable paving',sh:'Perm.',cost:54000,cap:7,c:'#993C1D',fl:false,wq:true,vol:true,t:'~$150/m² vs $80/m² tar-seal. Volume + quality. Low-traffic areas only. OoM $/ha.'},
+  {n:'Green roof',sh:'Grn roof',cost:140000,cap:4,c:'#A32D2D',fl:false,wq:false,vol:true,t:'Building-scale premium. TAC $335–595/m². Urban heat island benefit. OoM $/ha.'}
+];
+var cum=EX_CAP;
+for(var i=0;i<SOLS.length;i++){SOLS[i].x0=cum;cum+=SOLS[i].cap;SOLS[i].x1=cum;}
+function getScenarioLabel(g){
+  if(g===0)return'No gap — existing system sufficient for current design storm';
+  if(g<=8)return'+'+g+' units  ·  minor uplift (~5–10% storm intensity increase)';
+  if(g<=20)return'+'+g+' units  ·  moderate scenario (~15–20% increase, RCP4.5 mid-century)';
+  if(g<=35)return'+'+g+' units  ·  high scenario (~30% increase, RCP6.0)';
+  if(g<=55)return'+'+g+' units  ·  severe scenario (>40% increase, RCP8.5 end-century)';
+  return'+'+g+' units  ·  extreme scenario — full green infrastructure transition required';
+}
+function updateStats(gap){
+  var gu=EX_CAP+gap,sel=SOLS.filter(function(s){return s.x0<gu;}),el=document.getElementById('mstat');
+  if(!el)return;
+  if(sel.length===0){el.innerHTML='<span style="color:#888780">← move the slider to select solutions</span>';return;}
+  var mg=sel[sel.length-1],fl=sel.some(function(s){return s.fl;}),wq=sel.some(function(s){return s.wq;}),vol=sel.some(function(s){return s.vol;});
+  function chip(label,on,c){return'<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:5px;font-size:10px;border:0.5px solid '+(on?c:AC)+';opacity:'+(on?1:0.3)+'"><span style="width:6px;height:6px;border-radius:50%;background:'+c+';display:inline-block"></span>'+label+'</span>';}
+  el.innerHTML='<span style="color:#888780">'+sel.length+' solution'+(sel.length>1?'s':'')+' in merit order</span><span style="padding:2px 10px;border-radius:5px;font-size:11px;background:#f1efe8">Marginal cost: <strong>$'+mg.cost.toLocaleString()+'/ha/yr</strong></span>'+chip('Flood',fl,'#3B8BD4')+chip('Water quality',wq,'#1D9E75')+chip('Volume',vol,'#7F77DD');
+}
+function draw(gap){
+  cx.clearRect(0,0,W,H);
+  var gu=EX_CAP+gap,gpx=xp(gu),exY=yp(EX_COST),exX0=xp(0),exX1=xp(EX_CAP),exW=exX1-exX0,refY=yp(EX_COST);
+  if(gap>0){cx.globalAlpha=0.05;cx.fillStyle='#EF9F27';cx.fillRect(xp(EX_CAP),MT,gpx-xp(EX_CAP),CH);cx.globalAlpha=1;}
+  [100,300,1000,3000,10000,100000].forEach(function(t){var y=Math.round(yp(t))+.5;cx.strokeStyle=GC;cx.lineWidth=.5;cx.beginPath();cx.moveTo(ML,y);cx.lineTo(ML+CW,y);cx.stroke();});
+  [0,20,40,60,80,100].forEach(function(t){var x=Math.round(xp(t))+.5;cx.strokeStyle=GC;cx.lineWidth=.5;cx.beginPath();cx.moveTo(x,MT);cx.lineTo(x,MT+CH);cx.stroke();});
+  cx.strokeStyle=MC2;cx.lineWidth=0.8;cx.setLineDash([3,3]);cx.beginPath();cx.moveTo(xp(EX_CAP),refY);cx.lineTo(ML+CW,refY);cx.stroke();cx.setLineDash([]);
+  cx.fillStyle=MC2;cx.font='8px sans-serif';cx.textAlign='left';cx.fillText('← existing cost level',xp(EX_CAP)+5,refY-4);
+  cx.strokeStyle=dk?'rgba(194,192,182,0.25)':'rgba(61,61,58,0.18)';cx.lineWidth=1;cx.setLineDash([]);cx.beginPath();cx.moveTo(exX0,exY);cx.lineTo(exX1,exY);cx.lineTo(exX1,yp(SOLS[0].cost));
+  for(var i=0;i<SOLS.length;i++){cx.lineTo(xp(SOLS[i].x1),yp(SOLS[i].cost));if(i<SOLS.length-1)cx.lineTo(xp(SOLS[i].x1),yp(SOLS[i+1].cost));}cx.stroke();
+  cx.globalAlpha=0.4;cx.fillStyle=dk?'#444441':'#d3d1c7';rr(exX0,exY-BH/2,exW,BH);cx.fill();cx.globalAlpha=1;
+  cx.strokeStyle=dk?'#666461':'#888780';cx.lineWidth=0.8;rr(exX0,exY-BH/2,exW,BH);cx.stroke();
+  cx.fillStyle=AC;cx.font='8.5px sans-serif';cx.textAlign='center';cx.fillText('Existing grey infrastructure',exX0+exW/2,exY-BH/2-5);
+  cx.fillStyle=AC;cx.beginPath();cx.arc(ML-1,exY,2.5,0,Math.PI*2);cx.fill();
+  for(var i=0;i<SOLS.length;i++){
+    var s=SOLS[i],sel2=s.x0<gu,bx=xp(s.x0),bw=Math.max(xp(s.x1)-xp(s.x0),3),by=yp(s.cost);
+    cx.globalAlpha=sel2?.85:.15;cx.fillStyle=s.c;rr(bx,by-BH/2,bw,BH);cx.fill();cx.globalAlpha=1;
+    if(s.sh&&bw>=38){cx.globalAlpha=sel2?.95:.2;cx.fillStyle='#fff';cx.font='8px sans-serif';cx.textAlign='center';cx.fillText(s.sh,bx+bw/2,by+3.5);cx.globalAlpha=1;}
+    cx.globalAlpha=sel2?1:.2;cx.fillStyle=s.c;cx.beginPath();cx.arc(ML-1,by,2.5,0,Math.PI*2);cx.fill();cx.globalAlpha=1;
+    var dotY=MT+CH+38;
+    [{on:s.fl,c:'#3B8BD4'},{on:s.wq,c:'#1D9E75'},{on:s.vol,c:'#7F77DD'}].forEach(function(d,di){
+      var dx=bx+bw/2+(di-1)*7;cx.globalAlpha=sel2?(d.on?.9:.18):(d.on?.15:.07);cx.fillStyle=d.on?d.c:MC2;cx.beginPath();cx.arc(dx,dotY,3,0,Math.PI*2);cx.fill();cx.globalAlpha=1;
+    });
+  }
+  if(gap>0){cx.strokeStyle='#EF9F27';cx.lineWidth=1.5;cx.setLineDash([4,3]);cx.beginPath();cx.moveTo(gpx,MT-16);cx.lineTo(gpx,MT+CH+24);cx.stroke();cx.setLineDash([]);cx.fillStyle='#EF9F27';cx.font='500 9px sans-serif';cx.textAlign='center';cx.fillText('gap',gpx,MT-19);}
+  var brkY=MT+CH+15;cx.strokeStyle=AC;cx.lineWidth=.5;cx.beginPath();cx.moveTo(xp(0),brkY);cx.lineTo(xp(EX_CAP),brkY);cx.stroke();cx.beginPath();cx.moveTo(xp(0),brkY-3);cx.lineTo(xp(0),brkY+3);cx.stroke();cx.beginPath();cx.moveTo(xp(EX_CAP),brkY-3);cx.lineTo(xp(EX_CAP),brkY+3);cx.stroke();
+  cx.fillStyle=MC2;cx.font='8.5px sans-serif';cx.textAlign='center';cx.fillText('existing',xp(EX_CAP/2),brkY+10);cx.textAlign='left';cx.fillText('new solutions in merit order  →',xp(EX_CAP)+4,brkY+10);
+  cx.strokeStyle=AC;cx.lineWidth=1;cx.beginPath();cx.moveTo(ML,MT);cx.lineTo(ML,MT+CH);cx.lineTo(ML+CW,MT+CH);cx.stroke();
+  [[100,'$100'],[300,'$300'],[1000,'$1k'],[3000,'$3k'],[10000,'$10k'],[100000,'$100k']].forEach(function(p){cx.fillStyle=TC;cx.font='10px sans-serif';cx.textAlign='right';cx.fillText(p[1],ML-6,Math.round(yp(p[0]))+4);});
+  [0,20,40,60,80,100].forEach(function(t){cx.fillStyle=TC;cx.font='10px sans-serif';cx.textAlign='center';cx.fillText(t,xp(t),MT+CH+13);});
+  cx.fillStyle=TC;cx.font='11px sans-serif';cx.textAlign='center';cx.fillText('Cumulative stormwater management capacity (normalised units)',ML+CW/2,H-6);
+  cx.save();cx.translate(12,MT+CH/2);cx.rotate(-Math.PI/2);cx.fillText('Unit LCC  (NZD $/ha/yr)',0,0);cx.restore();
+  updateStats(gap);
+}
+cv.addEventListener('mousemove',function(e){
+  var rect=cv.getBoundingClientRect(),mx=(e.clientX-rect.left)*(W/rect.width),my=(e.clientY-rect.top)*(H/rect.height);
+  var gap=parseInt(document.getElementById('gsl').value),gu=EX_CAP+gap,exY=yp(EX_COST),hit=null;
+  for(var i=0;i<SOLS.length;i++){var s=SOLS[i];if(mx>=xp(s.x0)&&mx<=xp(s.x1)&&Math.abs(my-yp(s.cost))<=BH+2){hit=s;break;}}
+  var exHit=mx>=xp(0)&&mx<=xp(EX_CAP)&&Math.abs(my-exY)<=BH+2;
+  if(hit){
+    var sel2=hit.x0<gu;var cb=(hit.fl?'<span style="color:#3B8BD4">● flood</span>':'<span style="opacity:.3">○ flood</span>')+' '+(hit.wq?'<span style="color:#1D9E75">● quality</span>':'<span style="opacity:.3">○ quality</span>')+' '+(hit.vol?'<span style="color:#7F77DD">● volume</span>':'<span style="opacity:.3">○ volume</span>');
+    tp.innerHTML='<b style="color:'+hit.c+'">'+hit.n+'</b> '+(sel2?'<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(29,158,117,0.15);color:#1D9E75">✓ in merit order</span>':'<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(136,135,128,0.12);color:'+AC+'">reserve</span>')+'<br><span style="color:'+hit.c+'">$'+hit.cost.toLocaleString()+'/ha/yr</span> · '+hit.cap+' capacity units<br>'+cb+'<br><span style="font-size:10px;opacity:.8">'+hit.t+'</span>';
+    tp.style.display='block';tp.style.left=Math.min(e.offsetX+14,rect.width-230)+'px';tp.style.top=Math.max(e.offsetY-130,4)+'px';
+  }else if(exHit){
+    tp.innerHTML='<b>Existing grey infrastructure</b><br><span style="color:'+AC+'">~$1,050/ha/yr weighted avg</span> · 35 capacity units<br><span style="opacity:.4">○ flood</span> <span style="opacity:.25">○ quality</span> <span style="opacity:.25">○ volume</span><br><span style="font-size:10px;opacity:.8">Pipes, drains & trunk mains — conveyance only. Already deployed.</span>';
+    tp.style.display='block';tp.style.left=Math.min(e.offsetX+14,rect.width-230)+'px';tp.style.top=Math.max(e.offsetY-130,4)+'px';
+  }else{tp.style.display='none';}
+});
+cv.addEventListener('mouseleave',function(){tp.style.display='none';});
+var slider=document.getElementById('gsl'),glab=document.getElementById('glab');
+function onSlider(){var g=parseInt(slider.value);glab.textContent=getScenarioLabel(g);draw(g);}
+slider.addEventListener('input',onSlider);
+onSlider();
+})();
+</script>
+</body>
+</html>
