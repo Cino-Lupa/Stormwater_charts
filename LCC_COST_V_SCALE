@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stormwater Solutions — Unit LCC vs Scale</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #ffffff;
+    color: #3d3d3a;
+    padding: 24px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1e1e1c; color: #c2c0b6; }
+  }
+  h1 { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: #888780; margin-bottom: 16px; line-height: 1.5; }
+  .legend { display: flex; gap: 20px; margin-bottom: 12px; font-size: 11px; color: #888780; flex-wrap: wrap; align-items: center; }
+  .legend-swatch { width: 16px; height: 10px; border-radius: 2px; display: inline-block; vertical-align: middle; }
+  .chart-wrap { position: relative; }
+  canvas#sw { width: 100%; display: block; }
+  #swt {
+    position: absolute; display: none; pointer-events: none;
+    background: #ffffff; border: 0.5px solid #d3d1c7;
+    border-radius: 8px; padding: 8px 10px;
+    font-size: 11px; line-height: 1.6; max-width: 230px; z-index: 10;
+    color: #3d3d3a;
+  }
+  @media (prefers-color-scheme: dark) {
+    #swt { background: #2a2a28; border-color: #444441; color: #c2c0b6; }
+  }
+  .footnote { font-size: 10px; color: #888780; margin-top: 10px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<h1>Stormwater Solutions — Unit Life Cycle Cost vs Applicable Scale</h1>
+<p class="subtitle">Bar position = unit LCC at the scale where economies of scale are realised. Bar width spans minimum viable to efficient scale (MC≈0 elbow).</p>
+
+<div class="legend">
+  <span style="display:flex;align-items:center;gap:5px">
+    <span class="legend-swatch" style="background:#1D9E75;opacity:.82"></span>
+    Green / nature-based
+  </span>
+  <span style="display:flex;align-items:center;gap:5px">
+    <canvas id="lc" width="16" height="10" style="border-radius:2px;vertical-align:middle"></canvas>
+    Conventional grey (cost derived from pipe data)
+  </span>
+</div>
+
+<div class="chart-wrap">
+  <canvas id="sw"></canvas>
+  <div id="swt"></div>
+</div>
+
+<p class="footnote">Sources: Ira (2017) GW/Porirua Whaitua; FWMT Report 9, Auckland Council (2021). NZD indicative LCC $/ha/yr at ~60% impervious, 75% TSS. Bar spans minimum viable scale to the scale where economies of scale are realised. Grey infrastructure costs are estimates derived from reported pipe unit rates and are not directly stated LCCs. Rain tank, permeable paving &amp; green roof converted from $/m² — order-of-magnitude only.</p>
+
+<script>
+(function(){
+const cv=document.getElementById('sw'),cx=cv.getContext('2d');
+const tp=document.getElementById('swt');
+const R=window.devicePixelRatio||1;
+const W=780,H=610;
+cv.width=W*R;cv.height=H*R;
+cv.style.width=W+'px';cv.style.height=H+'px';
+cx.scale(R,R);
+
+const dk=matchMedia('(prefers-color-scheme: dark)').matches;
+const tc=dk?'#c2c0b6':'#3d3d3a';
+const gc=dk?'#3a3936':'#d3d1c7';
+const ac=dk?'#666461':'#888780';
+const sc=dk?'#555550':'#aaa9a0';
+
+function mkHatch(col,size,lw){
+  const p=document.createElement('canvas');
+  p.width=size;p.height=size;
+  const x=p.getContext('2d');
+  x.strokeStyle=col;x.lineWidth=lw;
+  x.beginPath();x.moveTo(-size/2,size);x.lineTo(size,0);x.stroke();
+  x.beginPath();x.moveTo(0,size);x.lineTo(size,0);x.stroke();
+  x.beginPath();x.moveTo(size/2,size);x.lineTo(size*1.5,0);x.stroke();
+  return cx.createPattern(p,'repeat');
+}
+const hatch=mkHatch(dk?'#888780':'#5F5E5A',6,1);
+
+const lc=document.getElementById('lc'),lx=lc.getContext('2d'),lR=window.devicePixelRatio||1;
+lc.width=16*lR;lc.height=10*lR;lx.scale(lR,lR);
+function mkHatch2(ctx,col,size,lw){
+  const p=document.createElement('canvas');p.width=size;p.height=size;
+  const x=p.getContext('2d');x.strokeStyle=col;x.lineWidth=lw;
+  x.beginPath();x.moveTo(-size/2,size);x.lineTo(size,0);x.stroke();
+  x.beginPath();x.moveTo(0,size);x.lineTo(size,0);x.stroke();
+  x.beginPath();x.moveTo(size/2,size);x.lineTo(size*1.5,0);x.stroke();
+  return ctx.createPattern(p,'repeat');
+}
+const lh=mkHatch2(lx,dk?'#888780':'#5F5E5A',6,1);
+lx.fillStyle=dk?'#444441':'#d3d1c7';lx.fillRect(0,0,16,10);
+lx.globalAlpha=.65;lx.fillStyle=lh;lx.fillRect(0,0,16,10);lx.globalAlpha=1;
+lx.strokeStyle=ac;lx.lineWidth=.5;lx.strokeRect(.25,.25,15.5,9.5);
+
+const ml=94,mt=28,mr=178,mb=90;
+const cw=W-ml-mr,ch=H-mt-mb;
+const X0=-3.1,X1=2.1;
+const Y0=Math.log10(70),Y1=Math.log10(280000);
+
+function xs(v){return ml+(Math.log10(v)-X0)/(X1-X0)*cw;}
+function ys(v){return mt+(Y1-Math.log10(v))/(Y1-Y0)*ch;}
+
+function rrp(x,y,w,h,r){
+  r=Math.min(r||3,w/2,h/2);
+  cx.beginPath();
+  cx.moveTo(x+r,y);cx.lineTo(x+w-r,y);cx.arcTo(x+w,y,x+w,y+r,r);
+  cx.lineTo(x+w,y+h-r);cx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  cx.lineTo(x+r,y+h);cx.arcTo(x,y+h,x,y+h-r,r);
+  cx.lineTo(x,y+r);cx.arcTo(x,y,x+r,y,r);
+  cx.closePath();
+}
+
+const D=[
+  {n:'Dry detention basin',cost:100,mn:10,mx:50,c:'#1D9E75',cat:'green',
+   t:'TAC ~$8k/ha; maint. ~$85/ha/yr. Flood &amp; peak-flow control only. Curve flattens above ~20ha. No water quality treatment.'},
+  {n:'Wet pond',cost:290,mn:5,mx:25,c:'#185FA5',cat:'green',
+   t:'NPV LCC ~$290/ha/yr (60% imperv., 75% TSS, 50yr, 3.8% DR). Economies realised above ~8ha — land cost is the dominant driver beyond this point.'},
+  {n:'Riparian buffer strip',cost:450,mn:1,mx:8,c:'#639922',cat:'green',
+   t:'~$450/ha/yr (estimated). Treats diffuse runoff only; no benefit for piped discharges. ~3,500m² bush per 600m² impervious treated.'},
+  {n:'Trunk stormwater main',cost:500,mn:8,mx:80,c:'#B4B2A9',cat:'grey',
+   t:'Derived from GW report pipe cost data. 600-900mm pipes. Est. LCC ~$400-600/ha/yr at efficient scale. Conveyance only — no water quality treatment.'},
+  {n:'Swale / filter strip',cost:1300,mn:0.1,mx:1,c:'#0F6E56',cat:'green',
+   t:'NPV LCC ~$1,300/ha/yr (60% imperv., 75% TSS, 50yr, 3.8% DR). Curve flattens at ~0.5-1ha. Slopes &lt;5% essential.'},
+  {n:'Constructed wetland',cost:1400,mn:2,mx:15,c:'#5DCAA5',cat:'green',
+   t:'Undiscounted LCC ~$1,400/ha/yr; NPV ~$1,320/ha/yr. Broadest contaminant removal. Curve flattens above ~5ha.'},
+  {n:'Stormwater drain &amp; catchpits',cost:1600,mn:0.2,mx:4,c:'#B4B2A9',cat:'grey',
+   t:'Derived from GW report. Kerb &amp; channel, catchpits &amp; reticulation (~300-375mm pipes). Est. LCC ~$1,400-1,800/ha/yr. Conveyance only.'},
+  {n:'Rain garden / tree pit',cost:3880,mn:0.01,mx:0.15,c:'#7F77DD',cat:'green',
+   t:'NPV LCC ~$3,880/ha/yr (60% imperv.). TAC: $2,000 + $300/m² device area. Curve flattens at ~0.05-0.15ha.'},
+  {n:'Sand filter',cost:12000,mn:0.02,mx:0.8,c:'#BA7517',cat:'green',
+   t:'Curve flattens at ~0.8ha. High TAC due to concrete &amp; excavation. Excellent for hydrocarbons &amp; metals.'},
+  {n:'Rain tank',cost:22000,mn:0.003,mx:0.01,c:'#993556',cat:'green',
+   t:'$7.5-10.5k/household; maint. $425-645/yr. Single-lot scale. OoM $/ha conversion.'},
+  {n:'Permeable paving',cost:54000,mn:0.01,mx:0.3,c:'#993C1D',cat:'green',
+   t:'TAC ~$150/m² vs ~$80/m² tar-seal. Maint. $8.80-$11/m²/yr. Curve flattens at ~0.1-0.3ha. OoM $/ha.'},
+  {n:'Green roof',cost:140000,mn:0.003,mx:0.05,c:'#A32D2D',cat:'green',
+   t:'TAC $335-595/m²; maint. $12-16/m²/yr. Building-scale only. Very limited economies of scale. OoM $/ha.'},
+];
+
+const BH=15;
+const P=D.map(d=>({...d,y:ys(d.cost),x1:xs(d.mn),x2:xs(d.mx)}));
+for(let iter=0;iter<800;iter++){
+  let ok=true;
+  for(let j=0;j<P.length-1;j++){
+    const g=P[j].y-P[j+1].y;
+    if(g<BH+3.5){const p=(BH+3.5-g)/2;P[j].y=Math.min(P[j].y+p,mt+ch-BH/2);P[j+1].y=Math.max(P[j+1].y-p,mt+BH/2);ok=false;}
+  }
+  if(ok)break;
+}
+
+[0.005,0.01,0.05,0.1,0.5,1,5,10,50,100].forEach(t=>{
+  if(Math.log10(t)<X0||Math.log10(t)>X1)return;
+  const x=Math.round(xs(t))+.5;
+  cx.strokeStyle=gc;cx.lineWidth=.5;
+  cx.beginPath();cx.moveTo(x,mt);cx.lineTo(x,mt+ch);cx.stroke();
+});
+[100,300,1000,3000,10000,30000,100000].forEach(t=>{
+  const y=Math.round(ys(t))+.5;
+  cx.strokeStyle=gc;cx.lineWidth=.5;
+  cx.beginPath();cx.moveTo(ml,y);cx.lineTo(ml+cw,y);cx.stroke();
+});
+
+[[0.01,'0.01'],[0.1,'0.1'],[1,'1'],[10,'10'],[100,'100']].forEach(([t,l])=>{
+  if(Math.log10(t)<X0||Math.log10(t)>X1)return;
+  cx.fillStyle=tc;cx.font='10px sans-serif';cx.textAlign='center';
+  cx.fillText(l,xs(t),mt+ch+14);
+});
+[[100,'$100'],[300,'$300'],[1000,'$1k'],[3000,'$3k'],[10000,'$10k'],[100000,'$100k']].forEach(([t,l])=>{
+  cx.fillStyle=tc;cx.font='10px sans-serif';cx.textAlign='right';
+  cx.fillText(l,ml-6,Math.round(ys(t))+4);
+});
+
+const bands=[
+  [0.001,0.01,'Site'],
+  [0.01,0.1,'Lot'],
+  [0.1,1,'Street'],
+  [1,10,'Neighbourhood'],
+  [10,125,'Catchment'],
+];
+const bandY=mt+ch+32;
+const bandH=18;
+bands.forEach(([s,e,label],i)=>{
+  const bx0=Math.max(xs(s),ml);
+  const bx1=Math.min(xs(e),ml+cw);
+  if(bx1<=bx0)return;
+  const bw=bx1-bx0;
+  cx.globalAlpha=i%2===0?0.07:0.13;
+  cx.fillStyle=dk?'#c2c0b6':'#3d3d3a';
+  cx.fillRect(bx0,bandY-2,bw,bandH);
+  cx.globalAlpha=1;
+  if(i>0){
+    cx.strokeStyle=ac;cx.lineWidth=0.5;
+    cx.beginPath();cx.moveTo(bx0,mt+ch);cx.lineTo(bx0,bandY+bandH-2);cx.stroke();
+  }
+  cx.fillStyle=sc;cx.font='9px sans-serif';cx.textAlign='center';
+  cx.fillText(label,bx0+bw/2,bandY+10);
+});
+
+cx.strokeStyle=ac;cx.lineWidth=1;
+cx.beginPath();cx.moveTo(ml,mt);cx.lineTo(ml,mt+ch);cx.lineTo(ml+cw,mt+ch);cx.stroke();
+
+cx.fillStyle=tc;cx.font='11px sans-serif';cx.textAlign='center';
+cx.fillText('Applicable catchment scale  (ha)',ml+cw/2,H-8);
+cx.save();cx.translate(13,mt+ch/2);cx.rotate(-Math.PI/2);
+cx.fillText('Unit LCC  (NZD $/ha/yr)',0,0);cx.restore();
+
+P.forEach(d=>{
+  const x=d.x1,w=Math.max(d.x2-d.x1,3),y=d.y-BH/2;
+  if(d.cat==='grey'){
+    cx.globalAlpha=.45;cx.fillStyle=d.c;rrp(x,y,w,BH);cx.fill();
+    cx.globalAlpha=.55;cx.fillStyle=hatch;rrp(x,y,w,BH);cx.fill();
+    cx.globalAlpha=1;
+    cx.strokeStyle=dk?'#888780':'#5F5E5A';cx.lineWidth=.8;rrp(x,y,w,BH);cx.stroke();
+  } else {
+    cx.globalAlpha=.82;cx.fillStyle=d.c;rrp(x,y,w,BH);cx.fill();cx.globalAlpha=1;
+  }
+  cx.fillStyle=d.cat==='grey'?(dk?'#888780':'#5F5E5A'):d.c;
+  cx.beginPath();cx.arc(ml-1,ys(d.cost),2.5,0,Math.PI*2);cx.fill();
+  const lineX=ml+cw+8;
+  cx.strokeStyle=d.cat==='grey'?(dk?'#888780':'#aaa9a0'):d.c;
+  cx.lineWidth=.5;cx.globalAlpha=.4;
+  cx.beginPath();cx.moveTo(d.x2,d.y);cx.lineTo(lineX,d.y);cx.stroke();
+  cx.globalAlpha=1;
+  cx.fillStyle=d.cat==='grey'?(dk?'#888780':'#5F5E5A'):d.c;
+  cx.beginPath();cx.arc(lineX+3,d.y,3.5,0,Math.PI*2);cx.fill();
+  cx.fillStyle=tc;cx.font='10px sans-serif';cx.textAlign='left';
+  cx.fillText(d.n,lineX+10,d.y+4);
+});
+
+cv.addEventListener('mousemove',e=>{
+  const rect=cv.getBoundingClientRect();
+  const SX=W/rect.width,SY=H/rect.height;
+  const mx=(e.clientX-rect.left)*SX,my=(e.clientY-rect.top)*SY;
+  const hit=P.find(d=>mx>=d.x1&&mx<=d.x2&&Math.abs(my-d.y)<=BH+2);
+  if(hit){
+    tp.style.display='block';
+    const badge=hit.cat==='grey'?'<span style="font-size:9px;background:#f1efe8;color:#5f5e5a;padding:1px 5px;border-radius:3px;margin-left:4px">grey infra</span>':'';
+    tp.innerHTML='<b style="color:'+hit.c+'">'+hit.n+'</b>'+badge+'<br>'+
+      '<span style="color:'+hit.c+'">$'+hit.cost.toLocaleString()+'/ha/yr</span><br>'+
+      'Efficient scale: '+hit.mn+'–'+hit.mx+' ha<br>'+
+      '<span style="opacity:.75;font-size:10px">'+hit.t+'</span>';
+    const pw=rect.width;
+    tp.style.left=Math.min(e.offsetX+14,pw-240)+'px';
+    tp.style.top=Math.max(e.offsetY-120,4)+'px';
+  } else {
+    tp.style.display='none';
+  }
+});
+cv.addEventListener('mouseleave',()=>{tp.style.display='none';});
+})();
+</script>
+</body>
+</html>
