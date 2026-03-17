@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stormwater Evolution Pathway</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #ffffff;
+    color: #3d3d3a;
+    padding: 24px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1e1e1c; color: #c2c0b6; }
+  }
+  h1 { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: #888780; margin-bottom: 14px; line-height: 1.6; }
+  .chart-wrap { position: relative; }
+  canvas#ec { width: 100%; display: block; }
+  #ect {
+    position: absolute; display: none; pointer-events: none;
+    background: #ffffff; border: 0.5px solid #d3d1c7;
+    border-radius: 8px; padding: 8px 10px;
+    font-size: 11px; line-height: 1.6; max-width: 240px; z-index: 10; color: #3d3d3a;
+  }
+  @media (prefers-color-scheme: dark) {
+    #ect { background: #2a2a28; border-color: #444441; color: #c2c0b6; }
+  }
+  .controls { margin: 10px 0 4px; display: flex; align-items: center; gap: 10px; font-size: 11px; }
+  .controls label { white-space: nowrap; font-weight: 500; min-width: 80px; }
+  #elab { font-size: 10px; color: #888780; margin-bottom: 8px; min-height: 16px; }
+  #estat { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-height: 28px; font-size: 11px; margin-bottom: 8px; }
+  #eleg { display: flex; gap: 10px; flex-wrap: wrap; font-size: 10px; color: #888780; min-height: 20px; margin-bottom: 8px; }
+  .footnote { font-size: 10px; color: #888780; margin-top: 8px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<h1>Stormwater Climate Adaptation — Evolution Pathway</h1>
+<p class="subtitle">The green curve shows the <strong>average cost of the optimal portfolio</strong> to fill any given capacity gap — solutions assembled in merit order, costed at their scale-appropriate rate (partial use carries a premium). Drag to explore the evolution pathway.</p>
+
+<div class="chart-wrap">
+  <canvas id="ec"></canvas>
+  <div id="ect"></div>
+</div>
+
+<div class="controls">
+  <label for="esl">Capacity gap</label>
+  <input type="range" id="esl" min="1" max="73" value="20" step="1" style="flex:1">
+</div>
+<div id="elab"></div>
+<div id="estat"></div>
+<div id="eleg"></div>
+
+<p class="footnote">Partial-scale premium: &lt;25% of efficient scale → 2.5× cost; 25–50% → 1.8×; 50–80% → 1.3×; ≥80% → full efficient-scale cost. Grey upgrade reference = $900/ha/yr. The portfolio mix bar shows solution composition at the selected gap — hover segments for detail. Sources: Ira (2017) GW/Porirua Whaitua; FWMT Report 9, Auckland Council (2021).</p>
+
+<script>
+(function(){
+var cv=document.getElementById('ec'),cx=cv.getContext('2d'),tp=document.getElementById('ect');
+var W=740,H=390,R=window.devicePixelRatio||1;
+cv.width=W*R;cv.height=H*R;cv.style.width=W+'px';cv.style.height=H+'px';cx.scale(R,R);
+var dk=window.matchMedia('(prefers-color-scheme:dark)').matches;
+var TC=dk?'#c2c0b6':'#3d3d3a',GC=dk?'#3a3936':'#d3d1c7',AC=dk?'#666461':'#888780',MC2=dk?'#555550':'#aaa9a0';
+var ML=82,MT=40,MR=14,ENV_H=208,CW=W-ML-MR;
+var COMP_Y=MT+ENV_H+44,COMP_H=20;
+var MAX_G=73,GREY=900,YMIN=70,YMAX=220000;
+function xp(v){return ML+(v/MAX_G)*CW;}
+function yp(v){return MT+(Math.log(YMAX)-Math.log(Math.max(v,YMIN)))/(Math.log(YMAX)-Math.log(YMIN))*ENV_H;}
+function rr(x,y,w,h,r){r=Math.min(r||3,w/2,h/2);cx.beginPath();cx.moveTo(x+r,y);cx.lineTo(x+w-r,y);cx.arcTo(x+w,y,x+w,y+r,r);cx.lineTo(x+w,y+h-r);cx.arcTo(x+w,y+h,x+w-r,y+h,r);cx.lineTo(x+r,y+h);cx.arcTo(x,y+h,x,y+h-r,r);cx.lineTo(x,y+r);cx.arcTo(x,y,x+r,y,r);cx.closePath();}
+var SOLS=[
+  {n:'Dry detention basin',sh:'Detention',cost:100,cap:15,c:'#1D9E75',fl:true,wq:false,vol:false,tip:'Large-scale, lowest unit cost. Flood & peak-flow control only — no water quality benefit.'},
+  {n:'Wet pond',sh:'Wet pond',cost:290,cap:12,c:'#185FA5',fl:true,wq:true,vol:false,tip:'Best-value dual-purpose. Flood + water quality (75% TSS). Efficient 5–25ha.'},
+  {n:'Riparian buffer',sh:'Riparian',cost:450,cap:5,c:'#639922',fl:true,wq:true,vol:true,tip:'Triple co-benefit but capacity limited by available riparian corridor.'},
+  {n:'Swale / filter strip',sh:'Swale',cost:1300,cap:7,c:'#0F6E56',fl:false,wq:true,vol:true,tip:'Street-scale. Replaces piped drainage with water quality benefit. Slopes <5% essential.'},
+  {n:'Constructed wetland',sh:'Wetland',cost:1400,cap:10,c:'#5DCAA5',fl:true,wq:true,vol:true,tip:'Broadest treatment spectrum. All three co-benefits. Efficient 2–15ha catchment.'},
+  {n:'Rain garden',sh:'Rain gdn',cost:3880,cap:6,c:'#7F77DD',fl:false,wq:true,vol:true,tip:'Lot-to-street scale. High amenity. TAC: $2,000 + $300/m².'},
+  {n:'Sand filter',sh:'Sand flt',cost:12000,cap:3,c:'#BA7517',fl:false,wq:true,vol:false,tip:'Specialist for hydrocarbons & fine metals. Best at industrial/motorway locations.'},
+  {n:'Rain tank',sh:'Rain tank',cost:22000,cap:4,c:'#993556',fl:false,wq:false,vol:true,tip:'Building-scale only. Volume reduction + potable savings. Cost is OoM $/ha.'},
+  {n:'Permeable paving',sh:'Perm.',cost:54000,cap:7,c:'#993C1D',fl:false,wq:true,vol:true,tip:'~$150/m² vs $80/m² tar-seal. Volume + quality. Clogging risk in high-sediment areas.'},
+  {n:'Green roof',sh:'Grn roof',cost:140000,cap:4,c:'#A32D2D',fl:false,wq:false,vol:true,tip:'Building-scale premium. TAC $335–595/m². Urban heat island co-benefit.'}
+];
+function effCost(sol,used){var f=used/sol.cap;if(f>=.8)return sol.cost;if(f>=.5)return sol.cost*1.3;if(f>=.25)return sol.cost*1.8;return sol.cost*2.5;}
+function getPortfolio(gap){
+  if(gap<=0)return{pieces:[],avgCost:0};
+  var rem=gap,pieces=[],total=0;
+  for(var i=0;i<SOLS.length&&rem>0;i++){var used=Math.min(SOLS[i].cap,rem),ec=effCost(SOLS[i],used);total+=used*ec;pieces.push({s:SOLS[i],used:used,frac:used/SOLS[i].cap,ec:ec});rem-=used;}
+  return{pieces:pieces,avgCost:total/gap};
+}
+var envelope=[];for(var g=0;g<=MAX_G;g++)envelope.push(getPortfolio(g).avgCost);
+var crossover=-1;for(var g=1;g<=MAX_G;g++){if(envelope[g]>GREY){crossover=g;break;}}
+function draw(gap){
+  cx.clearRect(0,0,W,H);
+  var gy=yp(GREY);
+  [100,300,1000,3000,10000,100000].forEach(function(t){var y=Math.round(yp(t))+.5;if(y<MT||y>MT+ENV_H)return;cx.strokeStyle=GC;cx.lineWidth=.5;cx.beginPath();cx.moveTo(ML,y);cx.lineTo(ML+CW,y);cx.stroke();});
+  [0,10,20,30,40,50,60,70].forEach(function(t){var x=Math.round(xp(t))+.5;cx.strokeStyle=GC;cx.lineWidth=.5;cx.beginPath();cx.moveTo(x,MT);cx.lineTo(x,MT+ENV_H);cx.stroke();});
+  cx.strokeStyle=dk?'rgba(136,135,128,0.5)':'rgba(95,94,90,0.32)';cx.lineWidth=0.8;cx.setLineDash([4,3]);cx.beginPath();cx.moveTo(ML,gy);cx.lineTo(ML+CW,gy);cx.stroke();cx.setLineDash([]);
+  cx.fillStyle=MC2;cx.font='8px sans-serif';cx.textAlign='left';cx.fillText('grey infrastructure upgrade  ($900/ha/yr)',ML+4,gy-5);
+  if(crossover>0){cx.beginPath();cx.moveTo(xp(1),yp(envelope[1]));for(var g2=2;g2<=crossover-1;g2++)cx.lineTo(xp(g2),yp(envelope[g2]));cx.lineTo(xp(crossover-1),gy);cx.lineTo(xp(1),gy);cx.closePath();cx.globalAlpha=0.07;cx.fillStyle='#1D9E75';cx.fill();cx.globalAlpha=1;}
+  if(crossover>0){var cx3=xp(crossover);cx.strokeStyle='#BA7517';cx.lineWidth=0.8;cx.setLineDash([3,2]);cx.beginPath();cx.moveTo(cx3,MT+4);cx.lineTo(cx3,MT+ENV_H);cx.stroke();cx.setLineDash([]);cx.fillStyle='#BA7517';cx.font='8px sans-serif';cx.textAlign='center';cx.fillText('↑ grey competitive',cx3,MT+ENV_H+14);cx.fillText('beyond gap='+crossover,cx3,MT+ENV_H+23);}
+  cx.beginPath();cx.moveTo(xp(1),yp(envelope[1]));for(var g2=2;g2<=MAX_G;g2++)cx.lineTo(xp(g2),yp(envelope[g2]));cx.lineTo(xp(MAX_G),MT+ENV_H);cx.lineTo(xp(1),MT+ENV_H);cx.closePath();cx.globalAlpha=0.06;cx.fillStyle='#1D9E75';cx.fill();cx.globalAlpha=1;
+  cx.beginPath();cx.moveTo(xp(1),yp(envelope[1]));for(var g2=2;g2<=MAX_G;g2++)cx.lineTo(xp(g2),yp(envelope[g2]));cx.strokeStyle='#1D9E75';cx.lineWidth=2.5;cx.stroke();
+  var port=getPortfolio(gap),avgC=port.avgCost,gx=xp(gap),gcy=yp(avgC),cheaper=avgC<GREY;
+  cx.strokeStyle='#EF9F27';cx.lineWidth=1.5;cx.setLineDash([4,3]);cx.beginPath();cx.moveTo(gx,MT-16);cx.lineTo(gx,MT+ENV_H+4);cx.stroke();cx.setLineDash([]);
+  cx.fillStyle='#EF9F27';cx.beginPath();cx.arc(gx,gcy,5.5,0,Math.PI*2);cx.fill();cx.fillStyle=dk?'#1e1e1c':'#ffffff';cx.beginPath();cx.arc(gx,gcy,2.5,0,Math.PI*2);cx.fill();
+  var labelRight=gx<ML+CW*0.6,lx2=labelRight?gx+8:gx-8,la=labelRight?'left':'right';
+  cx.font='500 10px sans-serif';cx.textAlign=la;cx.fillStyle='#EF9F27';cx.fillText('$'+Math.round(avgC).toLocaleString()+'/ha/yr avg',lx2,gcy-10);
+  cx.font='9px sans-serif';cx.fillStyle=cheaper?'#1D9E75':'#BA7517';cx.fillText(cheaper?'✓ '+Math.round(((GREY-avgC)/GREY)*100)+'% below grey':'⚠ above grey',lx2,gcy+18);
+  var barX=ML;cx.fillStyle=dk?'#2a2a28':'#f1efe8';cx.fillRect(barX,COMP_Y,CW,COMP_H);
+  if(gap>0&&port.pieces.length>0){
+    var cumX=barX;
+    port.pieces.forEach(function(p){
+      var sw=Math.max((p.used/gap)*CW,1);cx.globalAlpha=p.frac>=.8?.88:p.frac>=.5?.6:.35;cx.fillStyle=p.s.c;cx.fillRect(cumX,COMP_Y,sw,COMP_H);cx.globalAlpha=1;
+      if(p.frac<.8&&sw>6){cx.globalAlpha=0.22;cx.fillStyle='#fff';cx.fillRect(cumX,COMP_Y,sw,COMP_H);cx.globalAlpha=1;}
+      cx.strokeStyle=dk?'rgba(0,0,0,0.3)':'rgba(255,255,255,0.4)';cx.lineWidth=.5;cx.beginPath();cx.moveTo(cumX+sw,COMP_Y);cx.lineTo(cumX+sw,COMP_Y+COMP_H);cx.stroke();
+      cumX+=sw;
+    });
+    cx.strokeStyle='#EF9F27';cx.lineWidth=1;cx.setLineDash([3,2]);cx.beginPath();cx.moveTo(gx,COMP_Y-3);cx.lineTo(gx,COMP_Y+COMP_H+3);cx.stroke();cx.setLineDash([]);
+  }
+  cx.strokeStyle=AC;cx.lineWidth=.5;cx.strokeRect(barX,COMP_Y,CW,COMP_H);
+  cx.fillStyle=MC2;cx.font='8.5px sans-serif';cx.textAlign='right';cx.fillText('mix →',ML-4,COMP_Y+COMP_H/2+4);
+  cx.strokeStyle=AC;cx.lineWidth=1;cx.beginPath();cx.moveTo(ML,MT);cx.lineTo(ML,MT+ENV_H);cx.lineTo(ML+CW,MT+ENV_H);cx.stroke();
+  [[100,'$100'],[300,'$300'],[1000,'$1k'],[3000,'$3k'],[10000,'$10k'],[100000,'$100k']].forEach(function(p){var y=Math.round(yp(p[0]));if(y<MT||y>MT+ENV_H)return;cx.fillStyle=TC;cx.font='10px sans-serif';cx.textAlign='right';cx.fillText(p[1],ML-6,y+4);});
+  [0,10,20,30,40,50,60,70].forEach(function(t){cx.fillStyle=TC;cx.font='10px sans-serif';cx.textAlign='center';cx.fillText(t,xp(t),MT+ENV_H+14);});
+  cx.fillStyle=TC;cx.font='11px sans-serif';cx.textAlign='center';cx.fillText('Capacity gap to fill  (normalised units)',ML+CW/2,MT+ENV_H+28);
+  cx.save();cx.translate(12,MT+ENV_H/2);cx.rotate(-Math.PI/2);cx.fillText('Avg portfolio cost  (NZD $/ha/yr)',0,0);cx.restore();
+  updateStats(gap,port);updateLegend(gap,port);
+}
+function updateStats(gap,port){
+  var el=document.getElementById('estat');if(!el)return;
+  var avg=Math.round(port.avgCost),cheaper=avg<GREY,saving=Math.round(((GREY-avg)/GREY)*100);
+  el.innerHTML='<span style="color:#888780">'+port.pieces.length+' solutions assembled</span>'+
+    '<span style="padding:2px 10px;border-radius:5px;font-size:11px;background:#f1efe8">Avg: <strong>$'+avg.toLocaleString()+'/ha/yr</strong></span>'+
+    '<span style="padding:2px 10px;border-radius:5px;font-size:11px;'+(cheaper?'background:rgba(29,158,117,0.12);color:#1D9E75">✓ '+saving+'% cheaper than grey upgrade':'background:rgba(186,117,23,0.12);color:#BA7517">⚠ grey upgrade now competitive')+'</span>';
+}
+function updateLegend(gap,port){
+  var el=document.getElementById('eleg');if(!el)return;
+  if(!port.pieces.length){el.innerHTML='';return;}
+  el.innerHTML=port.pieces.map(function(p){
+    var partial=p.frac<.8,pct=Math.round(p.frac*100);
+    return'<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#888780"><span style="width:10px;height:10px;border-radius:2px;background:'+p.s.c+';opacity:'+(partial?.45:.85)+';display:inline-block"></span>'+p.s.n+(partial?' <span style="opacity:.6">('+pct+'% scale, $'+Math.round(p.ec).toLocaleString()+'/ha/yr)</span>':'')+'</span>';
+  }).join('');
+}
+function getLabel(g){
+  if(g<=8)return'+'+g+' units · minor uplift (~5–10% storm intensity increase)';
+  if(g<=20)return'+'+g+' units · moderate scenario (~15–20% increase, RCP4.5 mid-century)';
+  if(g<=35)return'+'+g+' units · high scenario (~30% increase, RCP6.0)';
+  if(g<=55)return'+'+g+' units · severe scenario (>40% increase, RCP8.5 end-century)';
+  return'+'+g+' units · extreme — green options largely exhausted';
+}
+cv.addEventListener('mousemove',function(e){
+  var rect=cv.getBoundingClientRect(),mx=(e.clientX-rect.left)*(W/rect.width),my=(e.clientY-rect.top)*(H/rect.height);
+  var gap=parseInt(document.getElementById('esl').value),port=getPortfolio(gap);
+  if(my>=COMP_Y&&my<=COMP_Y+COMP_H&&mx>=ML&&mx<=ML+CW){
+    var relX=mx-ML,cumX=0,hit=null;
+    port.pieces.forEach(function(p){var sw=(p.used/gap)*CW;if(relX>=cumX&&relX<cumX+sw)hit=p;cumX+=sw;});
+    if(hit){tp.style.display='block';tp.innerHTML='<b style="color:'+hit.s.c+'">'+hit.s.n+'</b><br>Cost at this scale: <b>$'+Math.round(hit.ec).toLocaleString()+'/ha/yr</b>'+(hit.frac<.8?'<br><span style="opacity:.75">Partial use ('+Math.round(hit.frac*100)+'% of efficient scale)</span><br><span style="font-size:10px;opacity:.7">Full-scale cost: $'+hit.s.cost.toLocaleString()+'/ha/yr</span>':'')+'<br>Capacity used: '+hit.used+' of '+hit.s.cap+' units';}
+    else tp.style.display='none';
+  }else if(my>=MT&&my<=MT+ENV_H){
+    var hg=Math.max(1,Math.min(MAX_G,Math.round((mx-ML)/CW*MAX_G))),hc=envelope[hg];
+    tp.style.display='block';tp.innerHTML='Gap: <b>'+hg+' units</b><br>Avg portfolio cost: <b>$'+Math.round(hc).toLocaleString()+'/ha/yr</b><br>'+(hc<GREY?'<span style="color:#1D9E75">✓ '+Math.round(((GREY-hc)/GREY)*100)+'% cheaper than grey upgrade</span>':'<span style="color:#BA7517">⚠ grey upgrade competitive at this scale</span>');
+  }else{tp.style.display='none';}
+  if(tp.style.display!=='none'){tp.style.left=Math.min(e.offsetX+14,rect.width-250)+'px';tp.style.top=Math.max(e.offsetY-110,4)+'px';}
+});
+cv.addEventListener('mouseleave',function(){tp.style.display='none';});
+var slider=document.getElementById('esl'),elab=document.getElementById('elab');
+function onSlider(){var g=parseInt(slider.value);elab.textContent=getLabel(g);draw(g);}
+slider.addEventListener('input',onSlider);
+onSlider();
+})();
+</script>
+</body>
+</html>
